@@ -4,6 +4,7 @@ import datetime
 import numpy
 import time
 import cv2
+import datetime
 
 DEBUGGING = False
 REQUIRE_CLOSENESS = 0.5
@@ -33,13 +34,23 @@ class Shape:
 
       return red_compare >= closeness and green_compare >= closeness and blue_compare >= closeness
 
+def calculateTimeBetweenPassages(passageTimes):
+  if len(passageTimes) < 2:
+    return []
+
+  deltas = []
+  last_time = passageTimes[0]
+  for time in passageTimes[1:]:
+    deltas.append(time - last_time)
+    last_time = time
+  return deltas
 
 class Driver:
   name = ""
   shape = None
-  nr_of_laps = 0
   last_position = 1.0
   _calibrating = False
+  _passages = []
   
   def __init__(self, name):
     self.name = name
@@ -51,7 +62,6 @@ class Driver:
 
   def reset(self):
     self.shape = None
-    self.nr_of_laps = 0
     self.last_position = 1.0
     self._calibrating = False
 
@@ -69,13 +79,30 @@ class Driver:
     self.last_position = position
 
   def laps(self):
-    return self.nr_of_laps
+    return len(self.lapTimes())
 
   def addLap(self):
-    self.nr_of_laps = self.nr_of_laps + 1
+    self._passages.append(datetime.datetime.now())
+
+  def lapTimes(self):
+    return calculateTimeBetweenPassages(self._passages)
+
+  def fastestLap(self):
+    lapTimes = self.lapTimes()
+    if len(lapTimes) < 1:
+      return datetime.timedelta()
+    return min(self.lapTimes())
+
+  def lastLap(self):
+    lapTimes = self.lapTimes()
+    if len(lapTimes) > 0:
+      return lapTimes[-1]
+    if len(self._passages) == 1:
+      return datetime.datetime.now() - self._passages[0]
+    return datetime.timedelta()
 
   def resetLaps(self):
-    self.nr_of_laps = 0
+    self._passages = []
 
   def calibrating(self):
     return self._calibrating
@@ -182,6 +209,7 @@ def drawHelp(frame, racing):
     "b    Reset the background",
     "r    Reset all laps",
     "s    " + startStop + " the race",
+    "+/-  resize the window",
     "q    Quit the program"
     ]
   helpText.reverse()
@@ -191,6 +219,13 @@ def drawHelp(frame, racing):
   for t in helpText:
     cv2.putText(frame, t, (20, y), cv2.FONT_HERSHEY_PLAIN, 2, (255,255,255), 2)
     y -= 30
+
+def formatTimeDelta(t):
+  seconds = str(t.seconds)
+  hundrethSeconds = str(t.microseconds)
+  if len(hundrethSeconds) > 2:
+    hundrethSeconds = hundrethSeconds[:2]
+  return seconds + "." + hundrethSeconds + "s"
   
 def drawDriverTexts(frame, drivers, racing):
   texts = []
@@ -198,7 +233,7 @@ def drawDriverTexts(frame, drivers, racing):
     text = ""
     if driver.hasShape():
       if racing:
-        texts.append(str(driver) + " " + str(driver.laps()))
+        texts.append(str(driver) + " " + str(driver.laps()) + " " + formatTimeDelta(driver.lastLap()) + " (" + formatTimeDelta(driver.fastestLap()) + ")")
       else:
         texts.append(str(driver) + "OK")
     if driver.calibrating():
@@ -288,9 +323,15 @@ else:
 
 calibrator = ShapeCalibrator()
 
+scale = 1.0
+
 while True:
 
   (grabbed, frame) = camera.read()
+
+  if not grabbed:
+    print "No webcam detected"
+    break
 
   if not hasBackground:
     backgroundFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -304,13 +345,15 @@ while True:
 
   updateDriverPositions(frame, drivers, shapes, racing)
 
+  frame = cv2.resize(frame, (0, 0), fx = scale, fy = scale)
+
   drawDriverTexts(frame, drivers, racing)
   drawHelp(frame, racing)
   drawFinishLine(frame)
 
   cv2.imshow(mainWindowName, frame)
 
-  key = cv2.waitKey(1) & 0xFF
+  key = cv2.waitKey(5) & 0xFF
 
   if key == ord("b"):
     hasBackground = False
@@ -322,6 +365,11 @@ while True:
       for driver in drivers:
         driver.resetLaps()
       racing = True
+  if key == ord("+"):
+    scale = scale + 0.1
+
+  if key == ord("-"):
+    scale = scale - 0.1
 
   if key == ord("r"):
     for driver in drivers:
