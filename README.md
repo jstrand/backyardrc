@@ -32,7 +32,7 @@ Time to race, press 's' to start counting laps.
 Improvements
 ------------------------------
 
-* Race timing and lap times obviously would be a nice feature
+* Race timing would be a nice feature
 * One-click installation at least for Windows
 * Full screen support
 * Nicer interface in general
