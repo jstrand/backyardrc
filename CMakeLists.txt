@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( BackyardRC )
+find_package( OpenCV REQUIRED )
+add_executable( backyardrc src/backyardrc.cpp src/shapes.cpp )
+target_link_libraries( backyardrc ${OpenCV_LIBS} )
